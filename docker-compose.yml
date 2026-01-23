@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  inkframe:
+    build: .
+    container_name: inkframe
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Required: Your Google Photos shared album URL
+      - GOOGLE_PHOTOS_ALBUM_URL=${GOOGLE_PHOTOS_ALBUM_URL}
+
+      # Image selection (optional)
+      - RECENT_THRESHOLD_DAYS=${RECENT_THRESHOLD_DAYS:-90}
+      - RECENT_WEIGHT=${RECENT_WEIGHT:-80}
+      - OLD_WEIGHT=${OLD_WEIGHT:-20}
+      - HISTORY_SIZE=${HISTORY_SIZE:-20}
+
+      # Server (optional)
+      - PORT=3000
+      - HOST=0.0.0.0
+
+      # Cache (optional)
+      - ALBUM_REFRESH_INTERVAL_MINUTES=${ALBUM_REFRESH_INTERVAL_MINUTES:-60}
+      - IMAGE_CACHE_ENABLED=${IMAGE_CACHE_ENABLED:-true}
+
+      # Processing (optional)
+      - DITHER_ENABLED=${DITHER_ENABLED:-true}
+      - OUTPUT_FORMAT=${OUTPUT_FORMAT:-png}
+
+      # Logging (optional)
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
