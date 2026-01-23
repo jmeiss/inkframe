@@ -68,7 +68,8 @@ function parseAlbumHtml(html) {
 
     while ((match = urlPattern.exec(html)) !== null) {
       const [fullMatch, url, width, height] = match;
-      if (parseInt(width) > 200 && parseInt(height) > 200 && !seen.has(url)) {
+      // Skip videos and duplicates
+      if (parseInt(width) > 200 && parseInt(height) > 200 && !seen.has(url) && !isVideoUrl(url)) {
         seen.add(url);
         photoData.push({
           url,
@@ -111,6 +112,46 @@ function parseAlbumHtml(html) {
 }
 
 /**
+ * Check if a URL is likely a video rather than a photo.
+ * Videos in Google Photos have specific URL patterns.
+ */
+function isVideoUrl(url) {
+  // Video URLs often contain these patterns
+  return url.includes('/video/') ||
+         url.includes('=m18') ||   // Video stream parameter
+         url.includes('=m22') ||   // Video stream parameter
+         url.includes('=m37') ||   // Video stream parameter
+         url.includes('/dv/');     // Direct video
+}
+
+/**
+ * Check if a data entry appears to be a video based on structure.
+ * Videos typically have additional nested arrays with video-specific data.
+ */
+function isVideoEntry(data) {
+  // Videos often have a nested array at index 3 or later containing video metadata
+  // like duration, format info, etc.
+  if (!Array.isArray(data) || data.length < 4) return false;
+
+  // Check for video duration indicator (usually a number representing seconds)
+  // Videos have duration data, photos don't
+  for (let i = 3; i < Math.min(data.length, 10); i++) {
+    const item = data[i];
+    // Video entries often have arrays with video codec/format info
+    if (Array.isArray(item) && item.length > 0) {
+      // Look for video-specific patterns like [null, "video/mp4", ...]
+      for (const subItem of item) {
+        if (typeof subItem === 'string' &&
+            (subItem.includes('video/') || subItem.includes('mp4') || subItem.includes('webm'))) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Recursively extract photo data from the nested Google Photos data structure.
  * Structure: [null, [[id, [url, w, h, ...], timestamp, ...], ...]]
  */
@@ -132,6 +173,11 @@ function extractPhotosFromData(data, photos, depth = 0) {
       const url = data[1][0];
       const width = data[1][1];
       const height = data[1][2];
+
+      // Skip videos
+      if (isVideoUrl(url) || isVideoEntry(data)) {
+        return;
+      }
 
       // Timestamp is at index 2 of the parent array (this array)
       let timestamp = null;
@@ -275,10 +321,40 @@ export async function fetchAlbum(albumUrl) {
  * @param {boolean} crop - Whether to crop (true) or letterbox (false)
  * @returns {string} URL with size parameters
  */
-export function buildImageUrl(baseUrl, width, height, crop = true) {
+/**
+ * Build a Google Photos image URL with size parameters.
+ *
+ * Google Photos URLs support various parameters:
+ * - =wXXX - width
+ * - =hXXX - height
+ * - -c - center crop
+ * - -no - no crop (letterbox)
+ * - -p - smart crop (Google's algorithm)
+ *
+ * @param {string} baseUrl - The base image URL
+ * @param {number} width - Desired width
+ * @param {number} height - Desired height
+ * @param {string} cropMode - Crop mode: 'center', 'smart', or 'none'
+ * @returns {string} URL with size parameters
+ */
+export function buildImageUrl(baseUrl, width, height, cropMode = 'none') {
   // Remove any existing size parameters
   const cleanUrl = baseUrl.replace(/=[^/]*$/, '');
-  const cropParam = crop ? '-c' : '-no';
+
+  let cropParam;
+  switch (cropMode) {
+    case 'center':
+      cropParam = '-c';
+      break;
+    case 'smart':
+      cropParam = '-p';
+      break;
+    case 'none':
+    default:
+      cropParam = '-no';
+      break;
+  }
+
   return `${cleanUrl}=w${width}-h${height}${cropParam}`;
 }
 

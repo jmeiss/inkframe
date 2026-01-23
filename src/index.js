@@ -8,10 +8,9 @@ import {
   getNextPhoto,
   getHistoryStatus,
   getNavigationStatus,
-  canGoPrevious,
-  canGoNext,
 } from './selection/picker.js';
 import { processImage, getCurrentImage, generateErrorImage } from './processing/pipeline.js';
+import { VALID_POSITIONS } from './processing/resize.js';
 
 const app = express();
 
@@ -22,11 +21,13 @@ const app = express();
  * Query params:
  *   raw=1     - Skip dithering, return resized image only
  *   refresh=1 - Force select a new image (don't serve cached)
+ *   crop=X    - Crop strategy: center, attention, entropy, north, south, east, west
  */
 app.get('/image', async (req, res) => {
   try {
     const raw = req.query.raw === '1';
     const forceRefresh = req.query.refresh === '1';
+    const crop = req.query.crop;
 
     // Check if we have a cached image and don't need to refresh
     const cached = getCurrentImage();
@@ -55,7 +56,7 @@ app.get('/image', async (req, res) => {
     }
 
     // Process the image
-    const result = await processImage(photo, { raw });
+    const result = await processImage(photo, { raw, crop });
 
     res.type('image/png');
     res.send(result.buffer);
@@ -254,6 +255,160 @@ app.get('/preview', async (req, res) => {
 
   res.type('html');
   res.send(html);
+});
+
+/**
+ * GET /test-crop
+ * Returns an HTML page showing the current photo with all crop strategies side-by-side.
+ * Useful for comparing how different crop algorithms handle the same image.
+ */
+app.get('/test-crop', async (req, res) => {
+  const cached = getCurrentImage();
+
+  if (!cached || !cached.metadata?.photoUrl) {
+    res.status(400).send('No current image. Visit /image first to load a photo.');
+    return;
+  }
+
+  const timestamp = cached.metadata?.timestamp
+    ? cached.metadata.timestamp.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : 'Unknown date';
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crop Strategy Comparison</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a1a;
+      color: #fff;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 10px;
+      color: #888;
+    }
+    .info {
+      color: #666;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 20px;
+    }
+    .crop-card {
+      background: #2a2a2a;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .crop-card h2 {
+      padding: 10px 15px;
+      font-size: 1rem;
+      background: #333;
+      border-bottom: 1px solid #444;
+    }
+    .crop-card img {
+      display: block;
+      width: 100%;
+      height: auto;
+      image-rendering: pixelated;
+    }
+    .actions {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+    }
+    a.button {
+      padding: 10px 20px;
+      background: #333;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    a.button:hover {
+      background: #444;
+    }
+    a.button.primary {
+      background: #0066cc;
+    }
+    a.button.primary:hover {
+      background: #0077ee;
+    }
+  </style>
+</head>
+<body>
+  <h1>Crop Strategy Comparison</h1>
+  <p class="info">Photo date: ${timestamp}</p>
+  <div class="grid">
+    ${VALID_POSITIONS.map((pos, i) => `
+      <div class="crop-card">
+        <h2>${pos}</h2>
+        <img src="/test-crop/image?position=${pos}&t=${Date.now() + i}" alt="${pos} crop">
+      </div>
+    `).join('')}
+  </div>
+  <div class="actions">
+    <a href="/image?refresh=1" class="button primary" onclick="setTimeout(() => location.reload(), 500); return true;">Load New Photo</a>
+    <a href="/preview" class="button">Back to Preview</a>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  res.type('html');
+  res.send(html);
+});
+
+/**
+ * GET /test-crop/image
+ * Returns the current photo processed with a specific crop position.
+ * Used by the /test-crop comparison page.
+ */
+app.get('/test-crop/image', async (req, res) => {
+  try {
+    const cached = getCurrentImage();
+
+    if (!cached || !cached.metadata?.photoUrl) {
+      const errorImage = await generateErrorImage('No photo loaded');
+      res.type('image/png');
+      return res.send(errorImage);
+    }
+
+    const position = req.query.position || 'entropy';
+
+    // Re-process the same photo with the specified crop position
+    const photo = {
+      url: cached.metadata.photoUrl,
+      timestamp: cached.metadata.timestamp,
+    };
+
+    const result = await processImage(photo, { raw: true, crop: position, skipCache: true });
+    res.set('Cache-Control', 'no-store');
+    res.type('image/png');
+    res.send(result.buffer);
+  } catch (error) {
+    logger.error('Error serving test-crop image', { error: error.message });
+    try {
+      const errorImage = await generateErrorImage('Processing error');
+      res.type('image/png');
+      res.send(errorImage);
+    } catch (e) {
+      res.status(500).json({ error: 'Failed to generate image' });
+    }
+  }
 });
 
 /**

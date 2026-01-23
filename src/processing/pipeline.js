@@ -110,28 +110,30 @@ async function downloadImage(url) {
  * @param {Object} photo - Photo object with url, width, height, timestamp
  * @param {Object} options - Processing options
  * @param {boolean} options.raw - Skip dithering, return resized only
+ * @param {string} options.crop - Crop position strategy (center, attention, entropy, north, etc.)
  * @returns {Promise<Object>} { buffer: Buffer, metadata: Object }
  */
 export async function processImage(photo, options = {}) {
-  const { raw = false } = options;
+  const { raw = false, crop, skipCache = false } = options;
   const { displayWidth, displayHeight, ditherEnabled } = config;
 
   logger.info('Processing image', {
     raw,
+    crop: crop || 'default',
     dither: ditherEnabled && !raw,
     timestamp: photo.timestamp?.toISOString(),
   });
 
   try {
     // Build URL with Google's size parameters for pre-scaling
-    // This reduces download size and processing time
-    const optimizedUrl = buildImageUrl(photo.url, displayWidth * 2, displayHeight * 2, true);
+    // Use Google's smart crop (-p) to get a better initial crop, then Sharp refines it
+    const optimizedUrl = buildImageUrl(photo.url, displayWidth * 2, displayHeight * 2, 'smart');
 
     // Download the image
     const imageBuffer = await downloadImage(optimizedUrl);
 
     // Resize to exact display dimensions
-    const resizedBuffer = await resizeImage(imageBuffer);
+    const resizedBuffer = await resizeImage(imageBuffer, { position: crop });
 
     // Get dimensions for dithering
     const metadata = await sharp(resizedBuffer).metadata();
@@ -163,14 +165,15 @@ export async function processImage(photo, options = {}) {
         width,
         height,
         timestamp: photo.timestamp,
-        originalUrl: photo.url,
+        photoUrl: photo.url,
+        originalUrl: photo.url, // Alias for backwards compatibility
         processedAt: new Date(),
         dithered: ditherEnabled && !raw,
       },
     };
 
-    // Update cache
-    if (config.imageCacheEnabled) {
+    // Update cache (unless skipCache is set)
+    if (config.imageCacheEnabled && !skipCache) {
       currentImageCache = result;
     }
 
