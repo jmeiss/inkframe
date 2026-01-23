@@ -437,16 +437,17 @@ async function start() {
   // Start HTTP server
   app.listen(config.port, config.host, () => {
     logger.info(`Server listening on http://${config.host}:${config.port}`);
-    logger.info('Endpoints:');
-    logger.info('  GET  /image         - Get processed random image');
-    logger.info('  GET  /image/current - Get current cached image');
-    logger.info('  GET  /next          - Navigate to next image (for button)');
-    logger.info('  GET  /previous      - Navigate to previous image (for button)');
-    logger.info('  GET  /navigation    - Get navigation status JSON');
-    logger.info('  GET  /preview       - HTML preview page');
-    logger.info('  GET  /health        - Server health status');
-    logger.info('  POST /refresh-album - Force refresh album cache');
   });
+
+  logger.info('Endpoints:');
+  logger.info('  GET  /image         - Get processed random image');
+  logger.info('  GET  /image/current - Get current cached image');
+  logger.info('  GET  /next          - Navigate to next image (for button)');
+  logger.info('  GET  /previous      - Navigate to previous image (for button)');
+  logger.info('  GET  /navigation    - Get navigation status JSON');
+  logger.info('  GET  /preview       - HTML preview page');
+  logger.info('  GET  /health        - Server health status');
+  logger.info('  POST /refresh-album - Force refresh album cache');
 }
 
 start().catch((error) => {

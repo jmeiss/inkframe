@@ -57,28 +57,54 @@ function parseAlbumHtml(html) {
     }
   });
 
-  // Alternative approach: look for image URLs directly in the page data
+  // Alternative approach: look for image URLs with timestamps in the page data
+  // Structure: ["id", ["url", width, height, ...]], timestamp, ...
   if (photos.length === 0) {
-    const urlPattern = /\["(https:\/\/lh3\.googleusercontent\.com\/[^"]+)",(\d+),(\d+)/g;
+    // First extract all URLs with dimensions
+    const urlPattern = /\["(https:\/\/lh3\.googleusercontent\.com\/pw\/[^"]+)",(\d+),(\d+)/g;
     let match;
     const seen = new Set();
+    const photoData = [];
 
     while ((match = urlPattern.exec(html)) !== null) {
-      const [, url, width, height] = match;
-      // Filter out thumbnails and icons (very small images)
+      const [fullMatch, url, width, height] = match;
       if (parseInt(width) > 200 && parseInt(height) > 200 && !seen.has(url)) {
         seen.add(url);
-        photos.push({
-          url: url,
+        photoData.push({
+          url,
           width: parseInt(width),
           height: parseInt(height),
-          timestamp: null, // Will try to extract from nearby data
+          matchIndex: match.index,
         });
       }
     }
 
-    // Try to extract timestamps
-    extractTimestampsFromHtml(html, photos);
+    // Now find timestamps - they appear after ]],  following each photo entry
+    // Look for 13-digit timestamps near each URL
+    for (const photo of photoData) {
+      // Search for timestamp in the ~500 chars after the URL match
+      const searchStart = photo.matchIndex;
+      const searchEnd = Math.min(searchStart + 500, html.length);
+      const searchText = html.substring(searchStart, searchEnd);
+
+      // Pattern: ]],timestamp, where timestamp is 13 digits starting with 17 (year 2024+)
+      const tsMatch = searchText.match(/\]\],(\d{13}),/);
+      let timestamp = null;
+      if (tsMatch) {
+        const ts = parseInt(tsMatch[1]);
+        // Validate it's a reasonable timestamp (2020-2030 range in ms)
+        if (ts > 1577836800000 && ts < 1893456000000) {
+          timestamp = new Date(ts);
+        }
+      }
+
+      photos.push({
+        url: photo.url,
+        width: photo.width,
+        height: photo.height,
+        timestamp,
+      });
+    }
   }
 
   return photos;
@@ -86,26 +112,37 @@ function parseAlbumHtml(html) {
 
 /**
  * Recursively extract photo data from the nested Google Photos data structure.
+ * Structure: [null, [[id, [url, w, h, ...], timestamp, ...], ...]]
  */
 function extractPhotosFromData(data, photos, depth = 0) {
   if (depth > 15 || !data) return;
 
   if (Array.isArray(data)) {
-    // Check if this array looks like a photo entry
-    // Photo entries typically have: [url, width, height] as first elements
-    // and timestamp somewhere in the structure
+    // Check if this is a photo entry: [id, [url, w, h, ...], timestamp, ...]
+    // The image data is in data[1] as [url, width, height, ...]
     if (data.length >= 3 &&
-        typeof data[0] === 'string' &&
-        data[0].includes('googleusercontent.com') &&
-        typeof data[1] === 'number' &&
-        typeof data[2] === 'number') {
+        typeof data[0] === 'string' &&  // Photo ID
+        Array.isArray(data[1]) &&        // Image data array
+        data[1].length >= 3 &&
+        typeof data[1][0] === 'string' &&
+        data[1][0].includes('googleusercontent.com') &&
+        typeof data[1][1] === 'number' &&
+        typeof data[1][2] === 'number') {
 
-      const url = data[0];
-      const width = data[1];
-      const height = data[2];
+      const url = data[1][0];
+      const width = data[1][1];
+      const height = data[1][2];
 
-      // Look for timestamp in the parent structure
-      let timestamp = findTimestamp(data);
+      // Timestamp is at index 2 of the parent array (this array)
+      let timestamp = null;
+      if (typeof data[2] === 'number') {
+        const ts = data[2];
+        if (ts > 1577836800000 && ts < 1893456000000) {
+          timestamp = new Date(ts);
+        } else if (ts > 1000000000000000 && ts < 2000000000000000) {
+          timestamp = new Date(ts / 1000);
+        }
+      }
 
       if (width > 200 && height > 200) {
         photos.push({
@@ -127,17 +164,22 @@ function extractPhotosFromData(data, photos, depth = 0) {
 
 /**
  * Look for a timestamp value in a data structure.
- * Google Photos timestamps are typically in microseconds since epoch.
+ * Google Photos timestamps can be in milliseconds (13 digits) or microseconds (16 digits).
  */
 function findTimestamp(data, depth = 0) {
   if (depth > 5 || !data) return null;
 
   if (Array.isArray(data)) {
     for (const item of data) {
-      // Timestamps are large numbers (microseconds since 1970)
-      // They start with 1 and have 16 digits for dates in 2000s-2020s
-      if (typeof item === 'number' && item > 1000000000000000 && item < 2000000000000000) {
-        return new Date(item / 1000); // Convert microseconds to milliseconds
+      if (typeof item === 'number') {
+        // 13-digit milliseconds (2020-2030 range)
+        if (item > 1577836800000 && item < 1893456000000) {
+          return new Date(item);
+        }
+        // 16-digit microseconds (legacy format)
+        if (item > 1000000000000000 && item < 2000000000000000) {
+          return new Date(item / 1000);
+        }
       }
       const found = findTimestamp(item, depth + 1);
       if (found) return found;
@@ -208,7 +250,8 @@ export async function fetchAlbum(albumUrl) {
   const html = await response.text();
   const photos = parseAlbumHtml(html);
 
-  logger.info('Album fetched', { photoCount: photos.length });
+  const photosWithTimestamp = photos.filter(p => p.timestamp).length;
+  logger.info('Album fetched', { photoCount: photos.length, withTimestamp: photosWithTimestamp });
 
   if (photos.length === 0) {
     logger.warn('No photos found in album. The album may be empty or the page structure may have changed.');

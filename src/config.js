@@ -24,6 +24,7 @@ export const config = {
   // Processing
   ditherEnabled: process.env.DITHER_ENABLED !== 'false',
   outputFormat: process.env.OUTPUT_FORMAT || 'png',
+  dateOverlayEnabled: process.env.DATE_OVERLAY_ENABLED !== 'false',
 
   // Display dimensions (Seeed Studio reTerminal E1002)
   displayWidth: 800,

@@ -1,9 +1,47 @@
 import sharp from 'sharp';
 import { resizeImage } from './resize.js';
-import { applyFloydSteinberg, quantizeOnly } from './dither.js';
+import { applyFloydSteinberg } from './dither.js';
 import { buildImageUrl } from '../album/fetcher.js';
 import config from '../config.js';
 import logger from '../utils/logger.js';
+
+/**
+ * Create an SVG overlay with date text on a semi-transparent background.
+ *
+ * @param {Date} timestamp - Photo timestamp
+ * @param {number} imageWidth - Image width
+ * @param {number} imageHeight - Image height
+ * @returns {Buffer} SVG buffer
+ */
+function createDateOverlay(timestamp, imageWidth, imageHeight) {
+  if (!timestamp) return null;
+
+  const dateStr = timestamp.toLocaleDateString('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  const padding = 12;
+  const fontSize = 18;
+  const textWidth = dateStr.length * 9; // Approximate width
+  const barHeight = fontSize + padding * 2;
+  const barWidth = textWidth + padding * 2;
+  const x = padding;
+  const y = imageHeight - barHeight - padding;
+
+  const svg = `
+    <svg width="${imageWidth}" height="${imageHeight}" xmlns="http://www.w3.org/2000/svg">
+      <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="4" ry="4" fill="rgba(0,0,0,0.6)"/>
+      <text x="${x + padding}" y="${y + padding + fontSize - 2}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" fill="white">
+        ${dateStr}
+      </text>
+    </svg>
+  `;
+
+  return Buffer.from(svg);
+}
 
 /**
  * Main image processing pipeline.
@@ -78,15 +116,23 @@ export async function processImage(photo, options = {}) {
 
     let outputBuffer;
 
-    if (raw) {
-      // Raw mode: just quantize without dithering
-      outputBuffer = await quantizeOnly(resizedBuffer, width, height);
-    } else if (ditherEnabled) {
-      // Full processing: apply Floyd-Steinberg dithering
-      outputBuffer = await applyFloydSteinberg(resizedBuffer, width, height);
+    // Apply date overlay if enabled
+    let imageWithOverlay = resizedBuffer;
+    if (config.dateOverlayEnabled && photo.timestamp) {
+      const overlay = createDateOverlay(photo.timestamp, width, height);
+      if (overlay) {
+        imageWithOverlay = await sharp(resizedBuffer)
+          .composite([{ input: overlay, top: 0, left: 0 }])
+          .toBuffer();
+      }
+    }
+
+    if (raw || !ditherEnabled) {
+      // Raw mode or dithering disabled: just return image as PNG
+      outputBuffer = await sharp(imageWithOverlay).png().toBuffer();
     } else {
-      // Dithering disabled: just quantize
-      outputBuffer = await quantizeOnly(resizedBuffer, width, height);
+      // Full processing: apply Floyd-Steinberg dithering
+      outputBuffer = await applyFloydSteinberg(imageWithOverlay, width, height);
     }
 
     const result = {
