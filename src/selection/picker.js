@@ -41,6 +41,42 @@ function categorizePhotos(photos) {
 }
 
 /**
+ * Find photos taken "on this day" in previous years.
+ * Matches photos within a window of days around today's month/day.
+ */
+function findOnThisDayPhotos(photos, windowDays = 3) {
+  const today = new Date();
+  const todayMonth = today.getMonth();
+  const todayDay = today.getDate();
+  const thisYear = today.getFullYear();
+
+  return photos.filter(photo => {
+    if (!photo.timestamp) return false;
+
+    const photoYear = photo.timestamp.getFullYear();
+    // Skip photos from the current year
+    if (photoYear === thisYear) return false;
+
+    const photoMonth = photo.timestamp.getMonth();
+    const photoDay = photo.timestamp.getDate();
+
+    // Check if within window of days
+    // Create dates in the same year for comparison
+    const todayInYear = new Date(2000, todayMonth, todayDay);
+    const photoInYear = new Date(2000, photoMonth, photoDay);
+
+    const diffMs = Math.abs(todayInYear - photoInYear);
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+    // Handle year wrap-around (e.g., Dec 31 vs Jan 1)
+    const daysInYear = 365;
+    const wrappedDiff = Math.min(diffDays, daysInYear - diffDays);
+
+    return wrappedDiff <= windowDays;
+  });
+}
+
+/**
  * Filter out recently shown photos from a list.
  */
 function filterRecentlyShown(photos) {
@@ -94,11 +130,35 @@ function addToNavigationHistory(photo) {
 
 /**
  * Pick a random photo using weighted selection based on photo age.
+ * If onThisDayEnabled is true, prioritizes photos from this day in previous years.
  */
 export function pickPhoto(photos) {
   if (!photos || photos.length === 0) {
     logger.warn('No photos available to pick from');
     return null;
+  }
+
+  // Check for "On this day" photos first
+  if (config.onThisDayEnabled) {
+    const onThisDayPhotos = findOnThisDayPhotos(photos, config.onThisDayWindowDays || 3);
+    const availableOnThisDay = filterRecentlyShown(onThisDayPhotos);
+
+    logger.debug('On this day photos', {
+      total: onThisDayPhotos.length,
+      available: availableOnThisDay.length,
+    });
+
+    // 50% chance to show "on this day" photo if available
+    if (availableOnThisDay.length > 0 && Math.random() < 0.5) {
+      const selectedPhoto = selectRandom(availableOnThisDay);
+      selectedPhoto.isOnThisDay = true;
+      addToHistory(selectedPhoto.url);
+      addToNavigationHistory(selectedPhoto);
+      logger.info('Selected "On this day" photo', {
+        year: selectedPhoto.timestamp.getFullYear(),
+      });
+      return selectedPhoto;
+    }
   }
 
   const { recent, old } = categorizePhotos(photos);

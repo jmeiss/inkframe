@@ -26,6 +26,14 @@ export const config = {
   outputFormat: process.env.OUTPUT_FORMAT || 'png',
   dateOverlayEnabled: process.env.DATE_OVERLAY_ENABLED !== 'false',
 
+  // "On this day" feature
+  onThisDayEnabled: process.env.ON_THIS_DAY_ENABLED !== 'false',
+  onThisDayWindowDays: parseInt(process.env.ON_THIS_DAY_WINDOW_DAYS, 10) || 3,
+
+  // Countdown overlay (format: YYYY-MM-DD or empty to disable)
+  countdownDate: process.env.COUNTDOWN_DATE || '',
+  countdownLabel: process.env.COUNTDOWN_LABEL || 'Holidays',
+
   // Display dimensions (Seeed Studio reTerminal E1002)
   displayWidth: 800,
   displayHeight: 480,
