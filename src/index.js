@@ -14,6 +14,9 @@ import { VALID_POSITIONS } from './processing/resize.js';
 
 const app = express();
 
+// All routes are mounted under /{PATH_SECRET}/ to prevent unauthorized access
+const router = express.Router();
+
 /**
  * GET /image
  * Returns a processed random image optimized for the e-paper display.
@@ -23,7 +26,7 @@ const app = express();
  *   refresh=1 - Force select a new image (don't serve cached)
  *   crop=X    - Crop strategy: center, attention, entropy, north, south, east, west
  */
-app.get('/image', async (req, res) => {
+router.get('/image', async (req, res) => {
   try {
     const raw = req.query.raw === '1';
     const forceRefresh = req.query.refresh === '1';
@@ -76,7 +79,7 @@ app.get('/image', async (req, res) => {
  * GET /image/current
  * Returns the currently cached processed image without selecting a new one.
  */
-app.get('/image/current', async (req, res) => {
+router.get('/image/current', async (req, res) => {
   try {
     const cached = getCurrentImage();
 
@@ -122,9 +125,10 @@ app.get('/image/current', async (req, res) => {
  * Query params:
  *   refresh=N - Auto-refresh the page every N seconds
  */
-app.get('/preview', async (req, res) => {
+router.get('/preview', async (req, res) => {
   const autoRefresh = parseInt(req.query.refresh) || 0;
   const cached = getCurrentImage();
+  const base = `/${config.pathSecret}`;
 
   const metadata = cached?.metadata || {};
   const timestamp = metadata.timestamp
@@ -221,27 +225,27 @@ app.get('/preview', async (req, res) => {
 <body>
   <h1>E-Paper Display Preview</h1>
   <div class="preview-container">
-    <img src="/image/current" alt="Current display image" width="800" height="480">
+    <img src="${base}/image/current" alt="Current display image" width="800" height="480">
   </div>
   <div class="metadata">
     <p><strong>Photo date:</strong> ${timestamp}</p>
     <p><strong>Processed at:</strong> ${processedAt}</p>
     <p><strong>Dithered:</strong> ${metadata.dithered ? 'Yes' : 'No'}</p>
-    <p><strong>Dimensions:</strong> ${metadata.width || 800} × ${metadata.height || 480}</p>
+    <p><strong>Dimensions:</strong> ${metadata.width || 800} &times; ${metadata.height || 480}</p>
   </div>
   <div class="actions">
-    <a href="/previous" class="button" id="prevBtn">← Previous</a>
-    <a href="/next" class="button primary">Next →</a>
+    <a href="${base}/previous" class="button" id="prevBtn">&larr; Previous</a>
+    <a href="${base}/next" class="button primary">Next &rarr;</a>
   </div>
   <div class="actions">
-    <a href="/preview${autoRefresh ? '' : '?refresh=30'}" class="button">
+    <a href="${base}/preview${autoRefresh ? '' : '?refresh=30'}" class="button">
       ${autoRefresh ? 'Stop' : 'Start'} Auto-refresh
     </a>
-    <a href="/health" class="button">Health Status</a>
+    <a href="${base}/health" class="button">Health Status</a>
   </div>
   <script>
-    // Update navigation buttons to reload page after action
-    document.querySelectorAll('.actions a[href="/previous"], .actions a[href="/next"]').forEach(btn => {
+    const base = '${base}';
+    document.querySelectorAll('.actions a[href="' + base + '/previous"], .actions a[href="' + base + '/next"]').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.preventDefault();
         await fetch(btn.getAttribute('href'));
@@ -262,11 +266,12 @@ app.get('/preview', async (req, res) => {
  * Returns an HTML page showing the current photo with all crop strategies side-by-side.
  * Useful for comparing how different crop algorithms handle the same image.
  */
-app.get('/test-crop', async (req, res) => {
+router.get('/test-crop', async (req, res) => {
   const cached = getCurrentImage();
+  const base = `/${config.pathSecret}`;
 
   if (!cached || !cached.metadata?.photoUrl) {
-    res.status(400).send('No current image. Visit /image first to load a photo.');
+    res.status(400).send(`No current image. Visit ${base}/image first to load a photo.`);
     return;
   }
 
@@ -356,13 +361,13 @@ app.get('/test-crop', async (req, res) => {
     ${VALID_POSITIONS.map((pos, i) => `
       <div class="crop-card">
         <h2>${pos}</h2>
-        <img src="/test-crop/image?position=${pos}&t=${Date.now() + i}" alt="${pos} crop">
+        <img src="${base}/test-crop/image?position=${pos}&t=${Date.now() + i}" alt="${pos} crop">
       </div>
     `).join('')}
   </div>
   <div class="actions">
-    <a href="/image?refresh=1" class="button primary" onclick="setTimeout(() => location.reload(), 500); return true;">Load New Photo</a>
-    <a href="/preview" class="button">Back to Preview</a>
+    <a href="${base}/image?refresh=1" class="button primary" onclick="setTimeout(() => location.reload(), 500); return true;">Load New Photo</a>
+    <a href="${base}/preview" class="button">Back to Preview</a>
   </div>
 </body>
 </html>
@@ -377,7 +382,7 @@ app.get('/test-crop', async (req, res) => {
  * Returns the current photo processed with a specific crop position.
  * Used by the /test-crop comparison page.
  */
-app.get('/test-crop/image', async (req, res) => {
+router.get('/test-crop/image', async (req, res) => {
   try {
     const cached = getCurrentImage();
 
@@ -415,7 +420,7 @@ app.get('/test-crop/image', async (req, res) => {
  * GET /health
  * Returns JSON with server status information.
  */
-app.get('/health', async (req, res) => {
+router.get('/health', async (req, res) => {
   const cacheStatus = getCacheStatus();
   const historyStatus = getHistoryStatus();
 
@@ -446,7 +451,7 @@ app.get('/health', async (req, res) => {
  * Navigate to the next image.
  * If at end of history, picks a new random image.
  */
-app.get('/next', async (req, res) => {
+router.get('/next', async (req, res) => {
   try {
     const raw = req.query.raw === '1';
 
@@ -491,7 +496,7 @@ app.get('/next', async (req, res) => {
  * Navigate to the previous image in history.
  * Returns error if at beginning of history.
  */
-app.get('/previous', async (req, res) => {
+router.get('/previous', async (req, res) => {
   try {
     const raw = req.query.raw === '1';
 
@@ -529,7 +534,7 @@ app.get('/previous', async (req, res) => {
  * GET /navigation
  * Returns JSON with navigation status (for button state feedback).
  */
-app.get('/navigation', (req, res) => {
+router.get('/navigation', (req, res) => {
   const navStatus = getNavigationStatus();
   res.json({
     canGoPrevious: navStatus.canGoPrevious,
@@ -543,7 +548,7 @@ app.get('/navigation', (req, res) => {
  * POST /refresh-album
  * Force refresh the album photo list cache.
  */
-app.post('/refresh-album', async (req, res) => {
+router.post('/refresh-album', async (req, res) => {
   try {
     await refreshAlbum();
     const status = getCacheStatus();
@@ -561,6 +566,14 @@ app.post('/refresh-album', async (req, res) => {
   }
 });
 
+// Mount all routes under the secret prefix
+app.use(`/${config.pathSecret}`, router);
+
+// Reject all other requests
+app.use((req, res) => {
+  res.status(404).send('Not found');
+});
+
 /**
  * Start the server.
  */
@@ -571,6 +584,8 @@ async function start() {
     logger.error('Configuration errors', { errors });
     process.exit(1);
   }
+
+  const base = `/${config.pathSecret}`;
 
   logger.info('Starting server', {
     port: config.port,
@@ -594,15 +609,13 @@ async function start() {
     logger.info(`Server listening on http://${config.host}:${config.port}`);
   });
 
-  logger.info('Endpoints:');
-  logger.info('  GET  /image         - Get processed random image');
-  logger.info('  GET  /image/current - Get current cached image');
-  logger.info('  GET  /next          - Navigate to next image (for button)');
-  logger.info('  GET  /previous      - Navigate to previous image (for button)');
-  logger.info('  GET  /navigation    - Get navigation status JSON');
-  logger.info('  GET  /preview       - HTML preview page');
-  logger.info('  GET  /health        - Server health status');
-  logger.info('  POST /refresh-album - Force refresh album cache');
+  logger.info('Endpoints (prefixed with PATH_SECRET):');
+  logger.info(`  GET  ${base}/image         - Get processed random image`);
+  logger.info(`  GET  ${base}/image/current - Get current cached image`);
+  logger.info(`  GET  ${base}/next          - Navigate to next image`);
+  logger.info(`  GET  ${base}/previous      - Navigate to previous image`);
+  logger.info(`  GET  ${base}/preview       - HTML preview page`);
+  logger.info(`  GET  ${base}/health        - Server health status`);
 }
 
 start().catch((error) => {

@@ -16,6 +16,7 @@ export const config = {
   // Server
   port: parseInt(process.env.PORT, 10) || 3000,
   host: process.env.HOST || '0.0.0.0',
+  pathSecret: process.env.PATH_SECRET || '',
 
   // Cache
   albumRefreshIntervalMinutes: parseInt(process.env.ALBUM_REFRESH_INTERVAL_MINUTES, 10) || 60,
@@ -47,6 +48,10 @@ export function validateConfig() {
 
   if (!config.albumUrl) {
     errors.push('GOOGLE_PHOTOS_ALBUM_URL is required');
+  }
+
+  if (!config.pathSecret) {
+    errors.push('PATH_SECRET is required (generate one with: openssl rand -hex 16)');
   }
 
   if (config.recentWeight + config.oldWeight !== 100) {
