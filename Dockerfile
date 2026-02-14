@@ -13,7 +13,7 @@ RUN npm ci --only=production
 FROM node:20-alpine
 
 # Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init fontconfig ttf-dejavu
 
 # Create non-root user
 RUN addgroup -g 1001 -S inkframe && \
