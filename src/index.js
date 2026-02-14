@@ -437,9 +437,10 @@ router.get('/health', async (req, res) => {
       historyMaxSize: historyStatus.maxSize,
     },
     config: {
-      recentThresholdDays: config.recentThresholdDays,
-      recentWeight: config.recentWeight,
-      oldWeight: config.oldWeight,
+      timeBuckets: config.timeBuckets.map(b => ({
+        maxDays: b.maxDays === Infinity ? 'older' : `≤${b.maxDays}d`,
+        weight: b.weight,
+      })),
       albumRefreshIntervalMinutes: config.albumRefreshIntervalMinutes,
       ditherEnabled: config.ditherEnabled,
     },

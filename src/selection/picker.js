@@ -13,31 +13,38 @@ const navigationHistory = [];
 let navigationIndex = -1; // Current position in navigation history
 
 /**
- * Categorize photos into recent and old based on their timestamps.
+ * Categorize photos into time-based buckets.
+ * Each bucket has a maxDays threshold and a selection weight.
+ * Photos are placed into the first bucket whose maxDays they fall within.
  */
 function categorizePhotos(photos) {
   const now = Date.now();
-  const thresholdMs = config.recentThresholdDays * 24 * 60 * 60 * 1000;
-  const cutoffDate = now - thresholdMs;
-
-  const recent = [];
-  const old = [];
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const buckets = config.timeBuckets.map(b => ({ ...b, photos: [] }));
 
   for (const photo of photos) {
     if (!photo.timestamp) {
-      old.push(photo);
+      // No timestamp → put in the last (catch-all) bucket
+      buckets[buckets.length - 1].photos.push(photo);
       continue;
     }
 
-    const photoTime = photo.timestamp.getTime();
-    if (photoTime >= cutoffDate) {
-      recent.push(photo);
-    } else {
-      old.push(photo);
+    const ageDays = (now - photo.timestamp.getTime()) / DAY_MS;
+
+    let placed = false;
+    for (const bucket of buckets) {
+      if (ageDays <= bucket.maxDays) {
+        bucket.photos.push(photo);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      buckets[buckets.length - 1].photos.push(photo);
     }
   }
 
-  return { recent, old };
+  return buckets;
 }
 
 /**
@@ -161,39 +168,48 @@ export function pickPhoto(photos) {
     }
   }
 
-  const { recent, old } = categorizePhotos(photos);
-  logger.debug('Photo categories', {
+  const buckets = categorizePhotos(photos);
+  logger.debug('Photo buckets', {
     total: photos.length,
-    recent: recent.length,
-    old: old.length,
+    buckets: buckets.map(b => ({
+      maxDays: b.maxDays === Infinity ? '∞' : b.maxDays,
+      weight: b.weight,
+      count: b.photos.length,
+    })),
   });
 
-  const availableRecent = filterRecentlyShown(recent);
-  const availableOld = filterRecentlyShown(old);
+  // Filter recently shown from each bucket
+  const availableBuckets = buckets.map(b => ({
+    ...b,
+    available: filterRecentlyShown(b.photos),
+  }));
 
-  logger.debug('Available after history filter', {
-    recent: availableRecent.length,
-    old: availableOld.length,
-  });
+  const totalAvailable = availableBuckets.reduce((sum, b) => sum + b.available.length, 0);
 
-  if (availableRecent.length === 0 && availableOld.length === 0) {
+  if (totalAvailable === 0) {
     logger.info('All photos recently shown, clearing history');
     recentHistory.length = 0;
     return pickPhoto(photos);
   }
 
-  let selectedPhoto = null;
-  const roll = Math.random() * 100;
+  // Weighted random selection across buckets.
+  // If a bucket is empty, redistribute its weight proportionally to non-empty buckets.
+  const nonEmptyBuckets = availableBuckets.filter(b => b.available.length > 0);
+  const activeWeight = nonEmptyBuckets.reduce((sum, b) => sum + b.weight, 0);
 
-  if (roll < config.recentWeight && availableRecent.length > 0) {
-    selectedPhoto = selectRandom(availableRecent);
-    logger.debug('Selected from recent photos');
-  } else if (availableOld.length > 0) {
-    selectedPhoto = selectRandom(availableOld);
-    logger.debug('Selected from old photos');
-  } else {
-    selectedPhoto = selectRandom(availableRecent);
-    logger.debug('Fallback: selected from recent (old category empty)');
+  let selectedPhoto = null;
+  const roll = Math.random() * activeWeight;
+  let cumulative = 0;
+
+  for (const bucket of nonEmptyBuckets) {
+    cumulative += bucket.weight;
+    if (roll < cumulative) {
+      selectedPhoto = selectRandom(bucket.available);
+      logger.debug('Selected from bucket', {
+        maxDays: bucket.maxDays === Infinity ? '∞' : bucket.maxDays,
+      });
+      break;
+    }
   }
 
   if (selectedPhoto) {
