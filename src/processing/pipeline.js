@@ -6,39 +6,60 @@ import config from '../config.js';
 import logger from '../utils/logger.js';
 
 /**
+ * Format a timestamp as relative time + date string.
+ * Returns { relative, dateStr } for separate styling.
+ */
+function formatRelativeTime(timestamp) {
+  const now = new Date();
+  const diffMs = now - timestamp;
+  const diffMin = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
+
+  const dateStr = timestamp.toLocaleDateString('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  let relative;
+  if (diffMin < 1) relative = 'Just now';
+  else if (diffMin < 60) relative = `${diffMin} min ago`;
+  else if (diffHours < 24) relative = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  else if (diffDays === 1) relative = 'Yesterday';
+  else if (diffDays < 30) relative = `${diffDays} days ago`;
+  else if (diffMonths < 12) relative = `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
+  else relative = `${diffYears} year${diffYears > 1 ? 's' : ''} ago`;
+
+  return { relative, dateStr };
+}
+
+/**
  * Create an SVG overlay bar at the bottom with date (left) and countdown (right).
  *
  * @param {Date} timestamp - Photo timestamp
- * @param {boolean} isOnThisDay - Whether this is an "on this day" photo
  * @param {number} imageWidth - Image width
  * @param {number} imageHeight - Image height
  * @returns {Buffer} SVG buffer
  */
-function createOverlay(timestamp, isOnThisDay, imageWidth, imageHeight) {
+function createOverlay(timestamp, imageWidth, imageHeight) {
   const padding = 12;
   const fontSize = 16;
   const barHeight = fontSize + padding * 2;
+  const y = imageHeight - barHeight;
 
-  // Build left text (date)
-  let leftText = '';
+  // Build left text (relative time + date)
+  let leftSvg = '';
   if (config.dateOverlayEnabled && timestamp) {
-    const dateStr = timestamp.toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-
-    if (isOnThisDay) {
-      const yearsAgo = new Date().getFullYear() - timestamp.getFullYear();
-      leftText = `${yearsAgo} year${yearsAgo > 1 ? 's' : ''} ago · ${dateStr}`;
-    } else {
-      leftText = dateStr;
-    }
+    const { relative, dateStr } = formatRelativeTime(timestamp);
+    leftSvg = `<text x="${padding}" y="${y + padding + fontSize - 3}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" fill="white"><tspan font-weight="bold">${relative}</tspan> (${dateStr})</text>`;
   }
 
   // Build right text (countdown)
-  let rightText = '';
+  let rightSvg = '';
   if (config.countdownDate) {
     const targetDate = new Date(config.countdownDate + 'T00:00:00');
     const today = new Date();
@@ -48,19 +69,18 @@ function createOverlay(timestamp, isOnThisDay, imageWidth, imageHeight) {
     const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
     if (daysLeft > 0) {
-      rightText = `${config.countdownLabel}: ${daysLeft} day${daysLeft > 1 ? 's' : ''}`;
+      const daysText = `${daysLeft} day${daysLeft > 1 ? 's' : ''}`;
+      rightSvg = `<text x="${imageWidth - padding}" y="${y + padding + fontSize - 3}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" fill="white" text-anchor="end">${config.countdownLabel}: <tspan font-weight="bold">${daysText}</tspan></text>`;
     }
   }
 
-  if (!leftText && !rightText) return null;
-
-  const y = imageHeight - barHeight;
+  if (!leftSvg && !rightSvg) return null;
 
   const svg = `
     <svg width="${imageWidth}" height="${imageHeight}" xmlns="http://www.w3.org/2000/svg">
       <rect x="0" y="${y}" width="${imageWidth}" height="${barHeight}" fill="rgba(0,0,0,0.6)"/>
-      ${leftText ? `<text x="${padding}" y="${y + padding + fontSize - 3}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" fill="white">${leftText}</text>` : ''}
-      ${rightText ? `<text x="${imageWidth - padding}" y="${y + padding + fontSize - 3}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" fill="white" text-anchor="end">${rightText}</text>` : ''}
+      ${leftSvg}
+      ${rightSvg}
     </svg>
   `;
 
@@ -144,7 +164,7 @@ export async function processImage(photo, options = {}) {
 
     // Apply overlays (date and/or countdown)
     let imageWithOverlay = resizedBuffer;
-    const overlay = createOverlay(photo.timestamp, photo.isOnThisDay, width, height);
+    const overlay = createOverlay(photo.timestamp, width, height);
     if (overlay) {
       imageWithOverlay = await sharp(resizedBuffer)
         .composite([{ input: overlay, top: 0, left: 0 }])
