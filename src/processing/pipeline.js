@@ -19,8 +19,8 @@ function formatRelativeTime(timestamp) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const photoDay = new Date(timestamp.getFullYear(), timestamp.getMonth(), timestamp.getDate());
   const diffDays = Math.round((today - photoDay) / (1000 * 60 * 60 * 24));
-  const diffMonths = Math.floor(diffDays / 30);
-  const diffYears = Math.floor(diffDays / 365);
+  const diffMonths = (now.getFullYear() - timestamp.getFullYear()) * 12 + (now.getMonth() - timestamp.getMonth());
+  const diffYears = now.getFullYear() - timestamp.getFullYear();
 
   const dateStr = timestamp.toLocaleDateString('en-US', {
     weekday: 'short',
