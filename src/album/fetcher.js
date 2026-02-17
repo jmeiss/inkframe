@@ -68,11 +68,6 @@ function parseAlbumHtml(html) {
 
     while ((match = urlPattern.exec(html)) !== null) {
       const [fullMatch, url, width, height] = match;
-      // Skip videos and duplicates
-      if (isVideoUrl(url)) {
-        logger.debug('Skipping video URL (regex path)', { url: url.substring(0, 80) });
-        continue;
-      }
       if (parseInt(width) > 200 && parseInt(height) > 200 && !seen.has(url)) {
         seen.add(url);
         photoData.push({
@@ -120,41 +115,11 @@ function parseAlbumHtml(html) {
 }
 
 /**
- * Check if a URL is likely a video rather than a photo.
- * Videos in Google Photos have specific URL patterns.
+ * Check if a media entry is a photo (not a video).
+ * Photos have a media type code at data[1][10]; videos lack this field.
  */
-function isVideoUrl(url) {
-  // Video URLs often contain these patterns
-  return url.includes('/video/') ||
-         url.includes('=m18') ||   // Video stream parameter
-         url.includes('=m22') ||   // Video stream parameter
-         url.includes('=m37') ||   // Video stream parameter
-         url.includes('/dv/');     // Direct video
-}
-
-/**
- * Check if a data entry appears to be a video based on structure.
- * Videos typically have additional nested arrays with video-specific data.
- */
-function isVideoEntry(data) {
-  if (!Array.isArray(data) || data.length < 4) return false;
-
-  // Stringify and search for video indicators — more resilient to structure changes
-  // than manual index traversal. Limit search depth to avoid false positives from
-  // deeply nested unrelated data.
-  try {
-    const str = JSON.stringify(data.slice(3, 15));
-    if (str.includes('video/') || str.includes('video%2F') ||
-        str.includes('"mp4"') || str.includes('"webm"') ||
-        str.includes('"mov"') || str.includes('"avi"') ||
-        str.includes('VIDEO') || str.includes('"m4v"')) {
-      return true;
-    }
-  } catch (e) {
-    // circular reference or stringify failure — skip
-  }
-
-  return false;
+function isPhotoEntry(imgArr) {
+  return imgArr.length > 10;
 }
 
 /**
@@ -180,16 +145,10 @@ function extractPhotosFromData(data, photos, depth = 0) {
       const width = data[1][1];
       const height = data[1][2];
 
-      // Skip videos:
-      // - URL pattern check (known video URL markers)
-      // - Data structure check (stringify search for video MIME types)
-      // - Media type field: photos have data[1][10] (a numeric type code),
-      //   videos/non-photo media lack this field (imgArr length <= 10)
-      if (isVideoUrl(url) || isVideoEntry(data) || data[1].length <= 10) {
-        logger.debug('Skipping non-photo media', {
-          url: url.substring(0, 80),
-          imgArrLen: data[1].length,
-        });
+      // Skip videos: photos have a media type code at data[1][10],
+      // videos lack this field (shorter image array)
+      if (!isPhotoEntry(data[1])) {
+        logger.debug('Skipping non-photo media', { imgArrLen: data[1].length });
         return;
       }
 
