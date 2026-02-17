@@ -69,7 +69,11 @@ function parseAlbumHtml(html) {
     while ((match = urlPattern.exec(html)) !== null) {
       const [fullMatch, url, width, height] = match;
       // Skip videos and duplicates
-      if (parseInt(width) > 200 && parseInt(height) > 200 && !seen.has(url) && !isVideoUrl(url)) {
+      if (isVideoUrl(url)) {
+        logger.debug('Skipping video URL (regex path)', { url: url.substring(0, 80) });
+        continue;
+      }
+      if (parseInt(width) > 200 && parseInt(height) > 200 && !seen.has(url)) {
         seen.add(url);
         photoData.push({
           url,
@@ -80,15 +84,19 @@ function parseAlbumHtml(html) {
       }
     }
 
-    // Now find timestamps - they appear after ]],  following each photo entry
-    // Look for 13-digit timestamps near each URL
+    // Now find timestamps and check for video markers near each URL
     for (const photo of photoData) {
-      // Search for timestamp in the ~500 chars after the URL match
       const searchStart = photo.matchIndex;
-      const searchEnd = Math.min(searchStart + 500, html.length);
+      const searchEnd = Math.min(searchStart + 1000, html.length);
       const searchText = html.substring(searchStart, searchEnd);
 
-      // Pattern: ]],timestamp, where timestamp is 13 digits starting with 17 (year 2024+)
+      // Check for video indicators in the surrounding data
+      if (/video\/|video%2F|"mp4"|"webm"|"mov"|"m4v"/i.test(searchText)) {
+        logger.debug('Skipping video (nearby text check)', { url: photo.url.substring(0, 80) });
+        continue;
+      }
+
+      // Pattern: ]],timestamp, where timestamp is 13 digits
       const tsMatch = searchText.match(/\]\],(\d{13}),/);
       let timestamp = null;
       if (tsMatch) {
@@ -129,25 +137,23 @@ function isVideoUrl(url) {
  * Videos typically have additional nested arrays with video-specific data.
  */
 function isVideoEntry(data) {
-  // Videos often have a nested array at index 3 or later containing video metadata
-  // like duration, format info, etc.
   if (!Array.isArray(data) || data.length < 4) return false;
 
-  // Check for video duration indicator (usually a number representing seconds)
-  // Videos have duration data, photos don't
-  for (let i = 3; i < Math.min(data.length, 10); i++) {
-    const item = data[i];
-    // Video entries often have arrays with video codec/format info
-    if (Array.isArray(item) && item.length > 0) {
-      // Look for video-specific patterns like [null, "video/mp4", ...]
-      for (const subItem of item) {
-        if (typeof subItem === 'string' &&
-            (subItem.includes('video/') || subItem.includes('mp4') || subItem.includes('webm'))) {
-          return true;
-        }
-      }
+  // Stringify and search for video indicators — more resilient to structure changes
+  // than manual index traversal. Limit search depth to avoid false positives from
+  // deeply nested unrelated data.
+  try {
+    const str = JSON.stringify(data.slice(3, 15));
+    if (str.includes('video/') || str.includes('video%2F') ||
+        str.includes('"mp4"') || str.includes('"webm"') ||
+        str.includes('"mov"') || str.includes('"avi"') ||
+        str.includes('VIDEO') || str.includes('"m4v"')) {
+      return true;
     }
+  } catch (e) {
+    // circular reference or stringify failure — skip
   }
+
   return false;
 }
 
@@ -174,8 +180,16 @@ function extractPhotosFromData(data, photos, depth = 0) {
       const width = data[1][1];
       const height = data[1][2];
 
-      // Skip videos
-      if (isVideoUrl(url) || isVideoEntry(data)) {
+      // Skip videos:
+      // - URL pattern check (known video URL markers)
+      // - Data structure check (stringify search for video MIME types)
+      // - Media type field: photos have data[1][10] (a numeric type code),
+      //   videos/non-photo media lack this field (imgArr length <= 10)
+      if (isVideoUrl(url) || isVideoEntry(data) || data[1].length <= 10) {
+        logger.debug('Skipping non-photo media', {
+          url: url.substring(0, 80),
+          imgArrLen: data[1].length,
+        });
         return;
       }
 

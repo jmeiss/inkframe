@@ -114,6 +114,11 @@ async function downloadImage(url) {
     throw new Error(`Failed to download image: ${response.status}`);
   }
 
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.startsWith('video/')) {
+    throw new Error(`URL returned video content-type: ${contentType}`);
+  }
+
   const arrayBuffer = await response.arrayBuffer();
   return Buffer.from(arrayBuffer);
 }
