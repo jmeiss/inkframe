@@ -29,12 +29,15 @@ function formatRelativeTime(timestamp) {
     day: 'numeric',
   });
 
+  const diffWeeks = Math.floor(diffDays / 7);
+
   let relative;
   if (diffMin < 1) relative = 'Just now';
   else if (diffMin < 60) relative = `${diffMin} min ago`;
   else if (diffHours < 24) relative = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
   else if (diffDays === 1) relative = 'Yesterday';
-  else if (diffDays < 30) relative = `${diffDays} days ago`;
+  else if (diffDays < 14) relative = `${diffDays} days ago`;
+  else if (diffWeeks <= 4) relative = `${diffWeeks} week${diffWeeks > 1 ? 's' : ''} ago`;
   else if (diffMonths < 12) relative = `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
   else relative = `${diffYears} year${diffYears > 1 ? 's' : ''} ago`;
 
