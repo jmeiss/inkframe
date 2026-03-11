@@ -6,7 +6,7 @@ services:
     container_name: inkframe
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3002:3000"
     environment:
       # Required: Your Google Photos shared album URL
       - GOOGLE_PHOTOS_ALBUM_URL=${GOOGLE_PHOTOS_ALBUM_URL}

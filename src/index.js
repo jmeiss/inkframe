@@ -49,20 +49,32 @@ router.get('/image', async (req, res) => {
       return res.send(errorImage);
     }
 
-    // Pick a random photo
-    const photo = pickPhoto(photos);
-    if (!photo) {
-      logger.warn('Failed to pick a photo');
-      const errorImage = await generateErrorImage('Failed to select photo');
-      res.type('image/png');
-      return res.send(errorImage);
+    // Try up to 3 times with different photos before giving up
+    const maxRetries = 3;
+    let lastError;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const photo = pickPhoto(photos);
+      if (!photo) {
+        logger.warn('Failed to pick a photo');
+        const errorImage = await generateErrorImage('Failed to select photo');
+        res.type('image/png');
+        return res.send(errorImage);
+      }
+
+      try {
+        const result = await processImage(photo, { raw, crop });
+        res.type('image/png');
+        return res.send(result.buffer);
+      } catch (error) {
+        lastError = error;
+        logger.warn(`Image processing failed (attempt ${attempt}/${maxRetries})`, {
+          error: error.message,
+        });
+      }
     }
 
-    // Process the image
-    const result = await processImage(photo, { raw, crop });
-
-    res.type('image/png');
-    res.send(result.buffer);
+    // All retries exhausted
+    throw lastError;
   } catch (error) {
     logger.error('Error serving image', { error: error.message });
     try {
