@@ -9,7 +9,7 @@ import {
   getHistoryStatus,
   getNavigationStatus,
 } from './selection/picker.js';
-import { processImage, getCurrentImage, generateErrorImage } from './processing/pipeline.js';
+import { processImage, getCurrentImage, generateErrorImage, getRecentErrors } from './processing/pipeline.js';
 import { VALID_POSITIONS } from './processing/resize.js';
 
 const app = express();
@@ -69,6 +69,7 @@ router.get('/image', async (req, res) => {
         lastError = error;
         logger.warn(`Image processing failed (attempt ${attempt}/${maxRetries})`, {
           error: error.message,
+          photoUrl: photo.url?.substring(0, 80),
         });
       }
     }
@@ -436,6 +437,8 @@ router.get('/health', async (req, res) => {
   const cacheStatus = getCacheStatus();
   const historyStatus = getHistoryStatus();
 
+  const recentErrors = getRecentErrors();
+
   res.json({
     status: 'ok',
     album: {
@@ -456,6 +459,7 @@ router.get('/health', async (req, res) => {
       albumRefreshIntervalMinutes: config.albumRefreshIntervalMinutes,
       ditherEnabled: config.ditherEnabled,
     },
+    recentErrors: recentErrors.length > 0 ? recentErrors : undefined,
   });
 });
 
@@ -581,6 +585,12 @@ router.post('/refresh-album', async (req, res) => {
 
 // Mount all routes under the secret prefix
 app.use(`/${config.pathSecret}`, router);
+
+// Health check at root (no secret required) for Docker healthcheck
+app.get('/health', async (req, res) => {
+  const cacheStatus = getCacheStatus();
+  res.json({ status: 'ok', photoCount: cacheStatus.photoCount });
+});
 
 // Reject all other requests
 app.use((req, res) => {

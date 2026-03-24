@@ -102,6 +102,26 @@ function createOverlay(timestamp, imageWidth, imageHeight) {
 // Cache for the currently processed image
 let currentImageCache = null;
 
+// Ring buffer of recent processing errors for diagnostics
+const recentErrors = [];
+const MAX_RECENT_ERRORS = 10;
+
+function recordError(step, error, context = {}) {
+  recentErrors.push({
+    time: new Date().toISOString(),
+    step,
+    error: error.message,
+    ...context,
+  });
+  if (recentErrors.length > MAX_RECENT_ERRORS) {
+    recentErrors.shift();
+  }
+}
+
+export function getRecentErrors() {
+  return recentErrors;
+}
+
 /**
  * Download an image from URL.
  *
@@ -113,17 +133,17 @@ async function downloadImage(url) {
 
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     },
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to download image: ${response.status}`);
+    throw new Error(`Failed to download image: HTTP ${response.status}`);
   }
 
   const contentType = response.headers.get('content-type') || '';
-  if (contentType.startsWith('video/')) {
-    throw new Error(`URL returned video content-type: ${contentType}`);
+  if (!contentType.startsWith('image/')) {
+    throw new Error(`Expected image content-type, got: ${contentType}`);
   }
 
   const arrayBuffer = await response.arrayBuffer();
@@ -156,18 +176,24 @@ export async function processImage(photo, options = {}) {
     timestamp: photo.timestamp?.toISOString(),
   });
 
+  const photoUrl = photo.url?.substring(0, 80);
+  let step = 'build-url';
+
   try {
     // Build URL with Google's size parameters for pre-scaling
     // Use Google's smart crop (-p) to get a better initial crop, then Sharp refines it
     const optimizedUrl = buildImageUrl(photo.url, displayWidth * 2, displayHeight * 2, 'smart');
 
     // Download the image
+    step = 'download';
     const imageBuffer = await downloadImage(optimizedUrl);
 
     // Resize to exact display dimensions
+    step = 'resize';
     const resizedBuffer = await resizeImage(imageBuffer, { position: crop });
 
     // Get dimensions for dithering
+    step = 'metadata';
     const metadata = await sharp(resizedBuffer).metadata();
     const width = metadata.width;
     const height = metadata.height;
@@ -175,6 +201,7 @@ export async function processImage(photo, options = {}) {
     let outputBuffer;
 
     // Apply overlays (date and/or countdown)
+    step = 'overlay';
     let imageWithOverlay = resizedBuffer;
     const overlay = createOverlay(photo.timestamp, width, height);
     if (overlay) {
@@ -183,6 +210,7 @@ export async function processImage(photo, options = {}) {
         .toBuffer();
     }
 
+    step = 'dither';
     if (raw || !ditherEnabled) {
       // Raw mode or dithering disabled: just return image as PNG
       outputBuffer = await sharp(imageWithOverlay).png().toBuffer();
@@ -216,7 +244,8 @@ export async function processImage(photo, options = {}) {
 
     return result;
   } catch (error) {
-    logger.error('Image processing failed', { error: error.message });
+    recordError(step, error, { photoUrl });
+    logger.error('Image processing failed', { step, error: error.message, photoUrl });
     throw error;
   }
 }
@@ -273,4 +302,5 @@ export default {
   getCurrentImage,
   clearImageCache,
   generateErrorImage,
+  getRecentErrors,
 };
