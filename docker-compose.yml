@@ -5,11 +5,12 @@ services:
     build: .
     container_name: inkframe
     restart: unless-stopped
-    ports:
-      - "3100:3000"
+    networks:
+      - caddy
     environment:
-      # Required: Your Google Photos shared album URL
+      # Required
       - GOOGLE_PHOTOS_ALBUM_URL=${GOOGLE_PHOTOS_ALBUM_URL}
+      - PATH_SECRET=${PATH_SECRET}
 
       # Image selection (optional)
       - RECENT_THRESHOLD_DAYS=${RECENT_THRESHOLD_DAYS:-90}
@@ -32,8 +33,13 @@ services:
       # Logging (optional)
       - LOG_LEVEL=${LOG_LEVEL:-info}
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/${PATH_SECRET}/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+
+networks:
+  caddy:
+    external: true
+    name: caddy_default
