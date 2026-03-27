@@ -65,20 +65,31 @@ function createOverlay(timestamp, imageWidth, imageHeight) {
     leftSvg = `<text x="${padding}" y="${y + padding + fontSize - 3}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" fill="white"><tspan font-weight="bold">${relative}</tspan> (${dateStr})</text>`;
   }
 
-  // Build right text (countdown)
+  // Build right text (holidays countdown)
   let rightSvg = '';
-  if (config.countdownDate) {
-    const targetDate = new Date(config.countdownDate + 'T00:00:00');
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  const now = new Date();
+  let nextHoliday = null;
+  let nextDate = null;
+  for (const h of config.holidays) {
+    const d = new Date(h.date);
+    if (d > now) { nextHoliday = h; nextDate = d; break; }
+  }
 
-    const diffMs = targetDate - today;
+  if (nextHoliday) {
+    const diffMs = nextDate - now;
     const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-    if (daysLeft > 0) {
-      const daysText = `${daysLeft} day${daysLeft > 1 ? 's' : ''}`;
-      rightSvg = `<text x="${imageWidth - padding}" y="${y + padding + fontSize - 3}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" fill="white" text-anchor="end">${config.countdownLabel}: <tspan font-weight="bold">${daysText}</tspan></text>`;
+    let countdownText;
+    if (daysLeft < 3) {
+      const hoursLeft = Math.floor(diffMs / (1000 * 60 * 60));
+      countdownText = `${hoursLeft} hour${hoursLeft !== 1 ? 's' : ''}`;
+    } else {
+      countdownText = `${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
     }
+
+    rightSvg = `<text x="${imageWidth - padding}" y="${y + padding + fontSize - 3}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" fill="white" text-anchor="end">${nextHoliday.label} <tspan font-weight="bold">${countdownText}</tspan></text>`;
+  } else if (config.holidays.length > 0) {
+    logger.debug('All holidays are in the past — update config.holidays to re-enable countdown');
   }
 
   if (!leftSvg && !rightSvg) return null;

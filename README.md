@@ -195,8 +195,7 @@ Force refresh the album photo list cache.
 | `DATE_OVERLAY_ENABLED` | `true` | Show photo date at bottom of image |
 | `ON_THIS_DAY_ENABLED` | `true` | Prioritize photos from this day in past years |
 | `ON_THIS_DAY_WINDOW_DAYS` | `3` | Days before/after to include for "on this day" |
-| `COUNTDOWN_DATE` | *(empty)* | Target date for countdown (format: `YYYY-MM-DD`) |
-| `COUNTDOWN_LABEL` | `Holidays` | Label shown before countdown |
+| *(holidays)* | *(hardcoded)* | Holiday countdown dates are configured in `src/config.js` |
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
 
 ## SenseCraft HMI Setup
