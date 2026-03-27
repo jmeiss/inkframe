@@ -6,6 +6,7 @@ const apiPort = parseInt(process.env.API_PORT || '3001');
 
 export default defineConfig({
   root: resolve(__dirname),
+  base: './',
   build: {
     outDir: 'dist',
     emptyOutDir: true,
