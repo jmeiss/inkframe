@@ -39,7 +39,7 @@ export const config = {
   historySize: parseInt(process.env.HISTORY_SIZE, 10) || 20,
 
   // Server
-  port: parseInt(process.env.PORT, 10) || 3000,
+  port: parseInt(process.env.CONDUCTOR_PORT || process.env.PORT, 10) || 3000,
   host: process.env.HOST || '0.0.0.0',
   pathSecret: process.env.PATH_SECRET || '',
 
@@ -56,9 +56,12 @@ export const config = {
   onThisDayEnabled: process.env.ON_THIS_DAY_ENABLED !== 'false',
   onThisDayWindowDays: parseInt(process.env.ON_THIS_DAY_WINDOW_DAYS, 10) || 3,
 
-  // Countdown overlay (format: YYYY-MM-DD or empty to disable)
-  countdownDate: process.env.COUNTDOWN_DATE || '',
-  countdownLabel: process.env.COUNTDOWN_LABEL || 'Holidays',
+  // Holidays countdown overlay (sorted chronologically, with explicit timezone)
+  holidays: [
+    { date: '2026-03-29T19:00:00+02:00', label: 'Asia Trip in' },
+    { date: '2026-05-29T18:20:00+02:00', label: 'Portugal in' },
+    { date: '2026-07-04T16:15:00+02:00', label: 'Portugal in' },
+  ],
 
   // Display dimensions (Seeed Studio reTerminal E1002)
   displayWidth: 800,
@@ -88,6 +91,15 @@ export function validateConfig() {
     if (bucket.weight < 0 || bucket.weight > 100) {
       errors.push(`TIME_BUCKETS: each weight must be 0-100 (got ${bucket.weight})`);
       break;
+    }
+  }
+
+  for (const [i, h] of config.holidays.entries()) {
+    if (isNaN(new Date(h.date).getTime())) {
+      errors.push(`holidays[${i}].date is not a valid date: "${h.date}"`);
+    }
+    if (!h.label) {
+      errors.push(`holidays[${i}].label is missing`);
     }
   }
 
