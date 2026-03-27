@@ -15,7 +15,8 @@ function parseTimeBuckets(envValue) {
     const totalWeight = buckets.reduce((sum, b) => sum + b.weight, 0);
     if (totalWeight !== 100) return null;
     return buckets;
-  } catch {
+  } catch (err) {
+    console.warn(`[WARN] Failed to parse TIME_BUCKETS="${envValue}": ${err.message}, using defaults`);
     return null;
   }
 }
@@ -39,7 +40,7 @@ export const config = {
   historySize: parseInt(process.env.HISTORY_SIZE, 10) || 20,
 
   // Server
-  port: parseInt(process.env.CONDUCTOR_PORT || process.env.PORT, 10) || 3000,
+  port: parseInt(process.env.API_PORT || process.env.PORT, 10) || 3001,
   host: process.env.HOST || '0.0.0.0',
   pathSecret: process.env.PATH_SECRET || '',
 

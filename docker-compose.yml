@@ -1,8 +1,9 @@
-version: '3.8'
-
 services:
   inkframe:
-    build: .
+    build:
+      context: .
+      args:
+        COMMIT_HASH: ${COMMIT_HASH:-dev}
     container_name: inkframe
     restart: unless-stopped
     networks:
@@ -13,9 +14,7 @@ services:
       - PATH_SECRET=${PATH_SECRET}
 
       # Image selection (optional)
-      - RECENT_THRESHOLD_DAYS=${RECENT_THRESHOLD_DAYS:-90}
-      - RECENT_WEIGHT=${RECENT_WEIGHT:-80}
-      - OLD_WEIGHT=${OLD_WEIGHT:-20}
+      - TIME_BUCKETS=${TIME_BUCKETS:-}
       - HISTORY_SIZE=${HISTORY_SIZE:-20}
 
       # Server (optional)
@@ -33,7 +32,7 @@ services:
       # Logging (optional)
       - LOG_LEVEL=${LOG_LEVEL:-info}
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/${PATH_SECRET}/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
