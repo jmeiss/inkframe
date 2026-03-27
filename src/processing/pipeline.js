@@ -80,8 +80,8 @@ function createOverlay(timestamp, imageWidth, imageHeight) {
     const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
     let countdownText;
-    if (daysLeft < 3) {
-      const hoursLeft = Math.floor(diffMs / (1000 * 60 * 60));
+    if (daysLeft <= 3) {
+      const hoursLeft = Math.round(diffMs / (1000 * 60 * 60));
       countdownText = `${hoursLeft} hour${hoursLeft !== 1 ? 's' : ''}`;
     } else {
       countdownText = `${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;

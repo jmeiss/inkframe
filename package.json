@@ -5,9 +5,17 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
+    "dev": "concurrently -n server,client -c blue,green \"npm run server:dev\" \"npm run client:dev\"",
+    "server:dev": "node --watch src/index.js",
+    "client:dev": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "start": "NODE_ENV=production node src/index.js",
+    "install:all": "npm install && npm --prefix client install",
+    "clean": "rm -rf node_modules client/node_modules client/dist",
+    "deploy:prod": "bash deploy.sh",
+    "logs:prod": "ssh docker 'docker logs --tail 50 -f inkframe'",
     "test": "node --test test/*.test.js",
+    "test:all": "npm test",
     "service:start": "launchctl start com.inkframe.server",
     "service:stop": "launchctl stop com.inkframe.server",
     "service:restart": "launchctl stop com.inkframe.server && sleep 1 && launchctl start com.inkframe.server",
@@ -28,7 +36,9 @@
     "express": "^4.18.2",
     "sharp": "^0.33.2"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
   "engines": {
     "node": ">=20.0.0"
   }

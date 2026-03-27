@@ -1,42 +1,42 @@
-# Build stage
-FROM node:20-alpine AS builder
+# Stage 1: Build client
+FROM node:20-alpine AS client-builder
+WORKDIR /app/client
+COPY client/package*.json ./
+RUN npm ci
+COPY client/ .
+ARG COMMIT_HASH=dev
+ENV VITE_COMMIT_HASH=$COMMIT_HASH
+RUN npm run build
 
+# Stage 2: Install server deps
+FROM node:20-alpine AS server-builder
 WORKDIR /app
-
-# Copy package files
 COPY package*.json ./
+RUN npm ci --omit=dev
 
-# Install dependencies (including dev dependencies for any build steps)
-RUN npm ci --only=production
-
-# Production stage
+# Stage 3: Production
 FROM node:20-alpine
 
-# Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init fontconfig ttf-dejavu
 
-# Create non-root user
 RUN addgroup -g 1001 -S inkframe && \
     adduser -S inkframe -u 1001 -G inkframe
 
 WORKDIR /app
 
-# Copy node_modules from builder
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=server-builder /app/node_modules ./node_modules
+COPY --from=client-builder /app/client/dist ./client/dist
+COPY src/ ./src/
+COPY package.json .
 
-# Copy application code
-COPY --chown=inkframe:inkframe . .
-
-# Switch to non-root user
 USER inkframe
 
-# Expose port
+ENV NODE_ENV=production
+ENV PORT=3000
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=10s \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
-# Start with dumb-init
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "src/index.js"]

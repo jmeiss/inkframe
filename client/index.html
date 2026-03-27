@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-Paper Preview</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body class="preview-page">
+  <h1>E-Paper Display Preview</h1>
+  <div class="preview-container">
+    <img id="display-image" src="" alt="Current display image" width="800" height="480">
+  </div>
+  <div class="metadata" id="metadata">
+    <p><strong>Photo date:</strong> <span id="meta-timestamp">Loading...</span></p>
+    <p><strong>Processed at:</strong> <span id="meta-processed-at"></span></p>
+    <p><strong>Dithered:</strong> <span id="meta-dithered"></span></p>
+    <p><strong>Dimensions:</strong> <span id="meta-dimensions"></span></p>
+  </div>
+  <div class="actions">
+    <button class="button" data-nav="previous">&larr; Previous</button>
+    <button class="button primary" data-nav="next">Next &rarr;</button>
+  </div>
+  <div class="actions">
+    <button class="button" id="auto-refresh-btn">Start Auto-refresh</button>
+    <a href="" class="button" id="health-link">Health Status</a>
+    <a href="./test-crop.html" class="button" id="crop-link">Crop Tester</a>
+  </div>
+  <script type="module" src="/src/preview.js"></script>
+</body>
+</html>
