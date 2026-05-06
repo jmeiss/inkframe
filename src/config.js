@@ -27,6 +27,7 @@ function parseTimeBuckets(envValue) {
 export const config = {
   // Google Photos album URL (override with GOOGLE_PHOTOS_ALBUM_URL env var)
   // Alice in toddlerland: https://photos.google.com/share/AF1QipOsGMpaLcTh-P8za_3JIcmLycQ66uMpJ6ZvB1Y95FOQAjw7lyL-qemvSwXaNCvP0g?key=WGQxNU15NFl0czZyUVlwMU8tdmNkWGV5MHcxNEhB
+  // Macau & Hong Kong & Beijing & Hoi An: https://photos.google.com/share/AF1QipNQ0UUs9esLn3d6_CbpX7jYGjUiyaOPaLaFJOryntdoO5pKyvIiZDkYDnWiib4VRw?key=bVpvb1pkZTVjWTM1MlFvXzZHSFlaMW9oZ0ctUDZB
   albumUrl: process.env.GOOGLE_PHOTOS_ALBUM_URL || 'https://photos.google.com/share/AF1QipNQ0UUs9esLn3d6_CbpX7jYGjUiyaOPaLaFJOryntdoO5pKyvIiZDkYDnWiib4VRw?key=bVpvb1pkZTVjWTM1MlFvXzZHSFlaMW9oZ0ctUDZB',
 
   // Image selection weights — time buckets
