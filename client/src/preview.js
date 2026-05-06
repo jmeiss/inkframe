@@ -92,18 +92,6 @@ async function navigate(direction) {
   });
 });
 
-// Navigation buttons (skip thumbnails — handled above)
-document.querySelectorAll('button[data-nav]').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    try {
-      await navigate(btn.dataset.nav);
-    } finally {
-      btn.disabled = false;
-    }
-  });
-});
-
 // Auto-refresh toggle
 autoRefreshBtn.addEventListener('click', () => {
   if (autoRefreshInterval) {
