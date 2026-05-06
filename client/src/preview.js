@@ -17,6 +17,7 @@ let nextPollTimer = null;
 healthLink.href = `${base}/health`;
 
 function loadImage() {
+  img.onload = loadMeta;
   img.src = `${base}/image/current?t=${Date.now()}`;
 }
 
@@ -79,7 +80,6 @@ async function navigate(direction) {
     return;
   }
   loadImage();
-  setTimeout(loadMeta, 500);
   loadPrevThumb();
   loadNextThumb();
 }
@@ -89,18 +89,6 @@ async function navigate(direction) {
   thumb.addEventListener('click', () => {
     if (thumb.classList.contains('empty')) return;
     navigate(thumb.dataset.nav);
-  });
-});
-
-// Navigation buttons (skip thumbnails — handled above)
-document.querySelectorAll('button[data-nav]').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    try {
-      await navigate(btn.dataset.nav);
-    } finally {
-      btn.disabled = false;
-    }
   });
 });
 
@@ -120,7 +108,6 @@ autoRefreshBtn.addEventListener('click', () => {
 });
 
 // Initial load
-loadImage();
-loadMeta();
+loadImage(); // loadMeta fires via img.onload
 loadPrevThumb();
 loadNextThumb();

@@ -113,6 +113,7 @@ router.get('/image/current', async (req, res, next) => {
 
     const result = await processImage(photo);
     sendImage(res, result.buffer);
+    triggerBackgroundPrefetch(photos, {});
   } catch (error) {
     next(error);
   }
