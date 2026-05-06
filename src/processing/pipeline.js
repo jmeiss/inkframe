@@ -113,6 +113,9 @@ function createOverlay(timestamp, imageWidth, imageHeight) {
 // Cache for the currently processed image
 let currentImageCache = null;
 
+// Pre-fetched next image, ready to serve immediately on the next request
+let nextImageCache = null;
+
 // Ring buffer of recent processing errors for diagnostics
 const recentErrors = [];
 const MAX_RECENT_ERRORS = 10;
@@ -142,23 +145,30 @@ export function getRecentErrors() {
 async function downloadImage(url) {
   logger.debug('Downloading image', { url: url.substring(0, 80) + '...' });
 
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(`Failed to download image: HTTP ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`Failed to download image: HTTP ${response.status}`);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.startsWith('image/')) {
+      throw new Error(`Expected image content-type, got: ${contentType}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } finally {
+    clearTimeout(timer);
   }
-
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.startsWith('image/')) {
-    throw new Error(`Expected image content-type, got: ${contentType}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
 }
 
 /**
@@ -276,6 +286,20 @@ export function getCurrentImage() {
 export function clearImageCache() {
   currentImageCache = null;
   logger.info('Image cache cleared');
+}
+
+export function setCurrentImageCache(result) {
+  currentImageCache = result;
+}
+
+export function consumeNextImageCache() {
+  const result = nextImageCache;
+  nextImageCache = null;
+  return result;
+}
+
+export function storeNextImageCache(result) {
+  nextImageCache = result;
 }
 
 /**
