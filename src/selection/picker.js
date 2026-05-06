@@ -139,7 +139,7 @@ function addToNavigationHistory(photo) {
  * Pick a random photo using weighted selection based on photo age.
  * If onThisDayEnabled is true, prioritizes photos from this day in previous years.
  */
-export function pickPhoto(photos) {
+export function pickPhoto(photos, { addToNavHistory = true } = {}) {
   if (!photos || photos.length === 0) {
     logger.warn('No photos available to pick from');
     return null;
@@ -160,7 +160,7 @@ export function pickPhoto(photos) {
       const selectedPhoto = selectRandom(availableOnThisDay);
       selectedPhoto.isOnThisDay = true;
       addToHistory(selectedPhoto.url);
-      addToNavigationHistory(selectedPhoto);
+      if (addToNavHistory) addToNavigationHistory(selectedPhoto);
       logger.info('Selected "On this day" photo', {
         year: selectedPhoto.timestamp.getFullYear(),
       });
@@ -189,7 +189,7 @@ export function pickPhoto(photos) {
   if (totalAvailable === 0) {
     logger.info('All photos recently shown, clearing history');
     recentHistory.length = 0;
-    return pickPhoto(photos);
+    return pickPhoto(photos, { addToNavHistory });
   }
 
   // Weighted random selection across buckets.
@@ -214,10 +214,21 @@ export function pickPhoto(photos) {
 
   if (selectedPhoto) {
     addToHistory(selectedPhoto.url);
-    addToNavigationHistory(selectedPhoto);
+    if (addToNavHistory) addToNavigationHistory(selectedPhoto);
   }
 
   return selectedPhoto;
+}
+
+// Pick for background prefetch: adds to recent history (avoids repeats) but
+// does NOT advance the navigation index — that only happens when served.
+export function pickPhotoForPrefetch(photos) {
+  return pickPhoto(photos, { addToNavHistory: false });
+}
+
+// Record a prefetched photo into navigation history when it is actually served.
+export function recordInNavigationHistory(photo) {
+  addToNavigationHistory(photo);
 }
 
 /**

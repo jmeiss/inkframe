@@ -296,8 +296,8 @@ export function consumeNextImageCache() {
   return result;
 }
 
-export function storeNextImageCache(result) {
-  nextImageCache = result;
+export function storeNextImageCache(result, photo) {
+  nextImageCache = { ...result, _photo: photo };
 }
 
 /**
