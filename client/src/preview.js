@@ -17,6 +17,7 @@ let nextPollTimer = null;
 healthLink.href = `${base}/health`;
 
 function loadImage() {
+  img.onload = loadMeta;
   img.src = `${base}/image/current?t=${Date.now()}`;
 }
 
@@ -79,7 +80,6 @@ async function navigate(direction) {
     return;
   }
   loadImage();
-  setTimeout(loadMeta, 500);
   loadPrevThumb();
   loadNextThumb();
 }
@@ -120,7 +120,6 @@ autoRefreshBtn.addEventListener('click', () => {
 });
 
 // Initial load
-loadImage();
-loadMeta();
+loadImage(); // loadMeta fires via img.onload
 loadPrevThumb();
 loadNextThumb();
