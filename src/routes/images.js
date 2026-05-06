@@ -2,8 +2,8 @@ import { Router } from 'express';
 import config from '../config.js';
 import logger from '../utils/logger.js';
 import { getPhotos } from '../album/cache.js';
-import { pickPhoto, getPreviousPhoto, getNextPhoto } from '../selection/picker.js';
-import { processImage, getCurrentImage, generateErrorImage, consumeNextImageCache, storeNextImageCache, setCurrentImageCache } from '../processing/pipeline.js';
+import { pickPhoto, getPreviousPhoto, getNextPhoto, peekPreviousPhoto } from '../selection/picker.js';
+import { processImage, getCurrentImage, generateErrorImage, consumeNextImageCache, storeNextImageCache, setCurrentImageCache, peekNextImageCache } from '../processing/pipeline.js';
 import { sendImage, sendErrorImage } from '../middleware/serveImage.js';
 
 const router = Router();
@@ -234,6 +234,35 @@ router.get('/previous', async (req, res, next) => {
     }
 
     const result = await processImage(photo, { raw });
+    sendImage(res, result.buffer);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /image/peek/next
+ * Returns the prefetched next image without consuming it (for preview strip).
+ * 204 if not ready yet.
+ */
+router.get('/image/peek/next', (req, res) => {
+  const next = peekNextImageCache();
+  if (!next) return res.status(204).end();
+  res.set('Cache-Control', 'no-store');
+  sendImage(res, next.buffer);
+});
+
+/**
+ * GET /image/peek/previous
+ * Returns the previous navigation history image without navigating (for preview strip).
+ * 204 if at the beginning of history.
+ */
+router.get('/image/peek/previous', async (req, res, next) => {
+  try {
+    const photo = peekPreviousPhoto();
+    if (!photo) return res.status(204).end();
+    const result = await processImage(photo, { skipCache: true });
+    res.set('Cache-Control', 'no-store');
     sendImage(res, result.buffer);
   } catch (error) {
     next(error);

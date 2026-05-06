@@ -8,9 +8,27 @@
 </head>
 <body class="preview-page">
   <h1>E-Paper Display Preview</h1>
-  <div class="preview-container">
-    <img id="display-image" src="" alt="Current display image" width="800" height="480">
+
+  <div class="film-strip">
+    <div class="film-thumb film-prev" id="prev-thumb" data-nav="previous" title="Previous">
+      <img id="prev-image" src="" alt="Previous image">
+      <div class="thumb-label">&larr; Previous</div>
+      <div class="thumb-empty" id="prev-empty">No previous</div>
+    </div>
+
+    <div class="film-main">
+      <div class="preview-container">
+        <img id="display-image" src="" alt="Current display image" width="800" height="480">
+      </div>
+    </div>
+
+    <div class="film-thumb film-next" id="next-thumb" data-nav="next" title="Next">
+      <img id="next-image" src="" alt="Next image">
+      <div class="thumb-label">Next &rarr;</div>
+      <div class="thumb-empty" id="next-empty">Loading&hellip;</div>
+    </div>
   </div>
+
   <div class="metadata" id="metadata">
     <p><strong>Photo date:</strong> <span id="meta-timestamp">Loading...</span></p>
     <p><strong>Processed at:</strong> <span id="meta-processed-at"></span></p>
