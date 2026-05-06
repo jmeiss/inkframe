@@ -221,6 +221,15 @@ export function pickPhoto(photos) {
 }
 
 /**
+ * Peek at the previous photo without navigating.
+ * Returns null if at the beginning of history.
+ */
+export function peekPreviousPhoto() {
+  if (navigationIndex <= 0) return null;
+  return navigationHistory[navigationIndex - 1];
+}
+
+/**
  * Get the previous photo in navigation history.
  * Returns null if at the beginning of history.
  */

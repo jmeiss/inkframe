@@ -286,6 +286,10 @@ export function setCurrentImageCache(result) {
   currentImageCache = result;
 }
 
+export function peekNextImageCache() {
+  return nextImageCache;
+}
+
 export function consumeNextImageCache() {
   const result = nextImageCache;
   nextImageCache = null;
