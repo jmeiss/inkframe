@@ -3,10 +3,21 @@ import config from '../config.js';
 import logger from '../utils/logger.js';
 import { getPhotos } from '../album/cache.js';
 import { pickPhoto, getPreviousPhoto, getNextPhoto } from '../selection/picker.js';
-import { processImage, getCurrentImage, generateErrorImage } from '../processing/pipeline.js';
+import { processImage, getCurrentImage, generateErrorImage, consumeNextImageCache, storeNextImageCache, setCurrentImageCache } from '../processing/pipeline.js';
 import { sendImage, sendErrorImage } from '../middleware/serveImage.js';
 
 const router = Router();
+
+let prefetchInProgress = false;
+
+function triggerBackgroundPrefetch(photos, options = {}) {
+  if (prefetchInProgress || !config.imageCacheEnabled) return;
+  prefetchInProgress = true;
+  pickAndProcess(photos, { ...options, skipCache: true })
+    .then(result => { if (result) storeNextImageCache(result); })
+    .catch(err => logger.warn('Background prefetch failed', { error: err.message }))
+    .finally(() => { prefetchInProgress = false; });
+}
 
 /**
  * Pick a photo and process it, retrying up to maxRetries times with different photos.
@@ -40,10 +51,25 @@ router.get('/image', async (req, res, next) => {
     const forceRefresh = req.query.refresh === '1';
     const crop = req.query.crop;
 
-    const cached = getCurrentImage();
-    if (cached && !forceRefresh && config.imageCacheEnabled) {
-      logger.debug('Serving cached image');
-      return sendImage(res, cached.buffer);
+    if (!forceRefresh && config.imageCacheEnabled) {
+      // Serve prefetched image if ready (advances to next photo instantly)
+      const next = consumeNextImageCache();
+      if (next) {
+        logger.debug('Serving prefetched image');
+        setCurrentImageCache(next);
+        sendImage(res, next.buffer);
+        getPhotos().then(photos => triggerBackgroundPrefetch(photos, { raw, crop })).catch(() => {});
+        return;
+      }
+
+      // Fall back to current cached image; kick off prefetch for next call
+      const cached = getCurrentImage();
+      if (cached) {
+        logger.debug('Serving cached image');
+        sendImage(res, cached.buffer);
+        getPhotos().then(photos => triggerBackgroundPrefetch(photos, { raw, crop })).catch(() => {});
+        return;
+      }
     }
 
     const photos = await getPhotos();
@@ -57,6 +83,7 @@ router.get('/image', async (req, res, next) => {
     }
 
     sendImage(res, result.buffer);
+    triggerBackgroundPrefetch(photos, { raw, crop });
   } catch (error) {
     next(error);
   }
@@ -99,22 +126,36 @@ router.get('/image/current', async (req, res, next) => {
 router.post('/next', async (req, res, next) => {
   try {
     const raw = req.query.raw === '1';
-    let photo = getNextPhoto();
+    const historyPhoto = getNextPhoto();
 
-    if (!photo) {
-      const photos = await getPhotos();
-      if (photos.length === 0) {
-        return res.status(404).json({ error: 'No photos in album' });
-      }
-      photo = pickPhoto(photos);
+    if (historyPhoto) {
+      // Navigating forward through existing history — no prefetch needed
+      await processImage(historyPhoto, { raw });
+      return res.json({ success: true });
     }
 
+    // At end of history: use prefetched image if ready, else process fresh
+    const prefetched = consumeNextImageCache();
+    if (prefetched) {
+      logger.debug('POST /next serving prefetched image');
+      setCurrentImageCache(prefetched);
+      res.json({ success: true });
+      getPhotos().then(photos => triggerBackgroundPrefetch(photos, { raw })).catch(() => {});
+      return;
+    }
+
+    const photos = await getPhotos();
+    if (photos.length === 0) {
+      return res.status(404).json({ error: 'No photos in album' });
+    }
+    const photo = pickPhoto(photos);
     if (!photo) {
       return res.status(404).json({ error: 'Failed to select photo' });
     }
 
     await processImage(photo, { raw });
     res.json({ success: true });
+    triggerBackgroundPrefetch(photos, { raw });
   } catch (error) {
     next(error);
   }
@@ -148,22 +189,34 @@ router.post('/previous', async (req, res, next) => {
 router.get('/next', async (req, res, next) => {
   try {
     const raw = req.query.raw === '1';
-    let photo = getNextPhoto();
+    const historyPhoto = getNextPhoto();
 
-    if (!photo) {
-      const photos = await getPhotos();
-      if (photos.length === 0) {
-        return sendErrorImage(res, 'No photos in album');
-      }
-      photo = pickPhoto(photos);
+    if (historyPhoto) {
+      const result = await processImage(historyPhoto, { raw });
+      return sendImage(res, result.buffer);
     }
 
+    const prefetched = consumeNextImageCache();
+    if (prefetched) {
+      logger.debug('GET /next serving prefetched image');
+      setCurrentImageCache(prefetched);
+      sendImage(res, prefetched.buffer);
+      getPhotos().then(photos => triggerBackgroundPrefetch(photos, { raw })).catch(() => {});
+      return;
+    }
+
+    const photos = await getPhotos();
+    if (photos.length === 0) {
+      return sendErrorImage(res, 'No photos in album');
+    }
+    const photo = pickPhoto(photos);
     if (!photo) {
       return sendErrorImage(res, 'Failed to select photo');
     }
 
     const result = await processImage(photo, { raw });
     sendImage(res, result.buffer);
+    triggerBackgroundPrefetch(photos, { raw });
   } catch (error) {
     next(error);
   }
