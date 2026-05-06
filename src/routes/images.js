@@ -2,7 +2,7 @@ import { Router } from 'express';
 import config from '../config.js';
 import logger from '../utils/logger.js';
 import { getPhotos } from '../album/cache.js';
-import { pickPhoto, getPreviousPhoto, getNextPhoto, peekPreviousPhoto } from '../selection/picker.js';
+import { pickPhoto, pickPhotoForPrefetch, recordInNavigationHistory, getPreviousPhoto, getNextPhoto, peekPreviousPhoto } from '../selection/picker.js';
 import { processImage, getCurrentImage, generateErrorImage, consumeNextImageCache, storeNextImageCache, setCurrentImageCache, peekNextImageCache } from '../processing/pipeline.js';
 import { sendImage, sendErrorImage } from '../middleware/serveImage.js';
 
@@ -13,8 +13,13 @@ let prefetchInProgress = false;
 function triggerBackgroundPrefetch(photos, options = {}) {
   if (prefetchInProgress || !config.imageCacheEnabled) return;
   prefetchInProgress = true;
-  pickAndProcess(photos, { ...options, skipCache: true })
-    .then(result => { if (result) storeNextImageCache(result); })
+  // Pick WITHOUT adding to nav history — nav history is updated only when served
+  (async () => {
+    const photo = pickPhotoForPrefetch(photos);
+    if (!photo) return;
+    const result = await processImage(photo, { ...options, skipCache: true });
+    storeNextImageCache(result, photo);
+  })()
     .catch(err => logger.warn('Background prefetch failed', { error: err.message }))
     .finally(() => { prefetchInProgress = false; });
 }
@@ -56,6 +61,7 @@ router.get('/image', async (req, res, next) => {
       const next = consumeNextImageCache();
       if (next) {
         logger.debug('Serving prefetched image');
+        if (next._photo) recordInNavigationHistory(next._photo);
         setCurrentImageCache(next);
         sendImage(res, next.buffer);
         getPhotos().then(photos => triggerBackgroundPrefetch(photos, { raw, crop })).catch(() => {});
@@ -139,6 +145,7 @@ router.post('/next', async (req, res, next) => {
     const prefetched = consumeNextImageCache();
     if (prefetched) {
       logger.debug('POST /next serving prefetched image');
+      if (prefetched._photo) recordInNavigationHistory(prefetched._photo);
       setCurrentImageCache(prefetched);
       res.json({ success: true });
       getPhotos().then(photos => triggerBackgroundPrefetch(photos, { raw })).catch(() => {});
@@ -200,6 +207,7 @@ router.get('/next', async (req, res, next) => {
     const prefetched = consumeNextImageCache();
     if (prefetched) {
       logger.debug('GET /next serving prefetched image');
+      if (prefetched._photo) recordInNavigationHistory(prefetched._photo);
       setCurrentImageCache(prefetched);
       sendImage(res, prefetched.buffer);
       getPhotos().then(photos => triggerBackgroundPrefetch(photos, { raw })).catch(() => {});
