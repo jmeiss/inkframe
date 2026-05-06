@@ -12,7 +12,7 @@
     "start": "NODE_ENV=production node src/index.js",
     "install:all": "npm install && npm --prefix client install",
     "clean": "rm -rf node_modules client/node_modules client/dist",
-    "deploy:prod": "bash deploy.sh",
+    "deploy:prod": "ssh docker 'cd ~/services && git pull && bash ~/services/deploy-inkframe.sh'",
     "logs:prod": "ssh docker 'docker logs --tail 50 -f inkframe'",
     "test": "node --test test/*.test.js",
     "test:all": "npm test",
