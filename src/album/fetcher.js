@@ -16,14 +16,8 @@ async function resolveShortUrl(url) {
     return url;
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10_000);
-  try {
-    const response = await fetch(url, { redirect: 'follow', signal: controller.signal });
-    return response.url;
-  } finally {
-    clearTimeout(timer);
-  }
+  const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(10_000) });
+  return response.url;
 }
 
 /**
@@ -260,21 +254,14 @@ export async function fetchAlbum(albumUrl) {
   logger.debug('Resolved URL', { resolved: resolvedUrl });
 
   // Fetch the album page
-  const abortCtrl = new AbortController();
-  const fetchTimer = setTimeout(() => abortCtrl.abort(), 20_000);
-  let response;
-  try {
-    response = await fetch(resolvedUrl, {
-      signal: abortCtrl.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-    });
-  } finally {
-    clearTimeout(fetchTimer);
-  }
+  const response = await fetch(resolvedUrl, {
+    signal: AbortSignal.timeout(20_000),
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch album: ${response.status} ${response.statusText}`);
