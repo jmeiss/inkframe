@@ -59,9 +59,9 @@ export const config = {
 
   // Holidays countdown overlay (sorted chronologically, with explicit timezone)
   holidays: [
-    { date: '2026-03-29T19:00:00+02:00', label: 'Asia Trip in' },
-    { date: '2026-05-29T18:20:00+02:00', label: 'Portugal in' },
-    { date: '2026-07-04T16:15:00+02:00', label: 'Portugal in' },
+    { date: '2026-10-16T18:30:00+02:00', label: 'Vacances Toussaint in' },
+    { date: '2026-11-07T20:20:00+01:00', label: 'Portugal in' },
+    { date: '2026-12-18T18:30:00+01:00', label: 'Vacances Noël in' },
   ],
 
   // Display dimensions (Seeed Studio reTerminal E1002)
