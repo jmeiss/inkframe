@@ -62,6 +62,12 @@ export const config = {
     { date: '2026-10-16T18:30:00+02:00', label: 'Vacances Toussaint in' },
     { date: '2026-11-07T20:20:00+01:00', label: 'Portugal in' },
     { date: '2026-12-18T18:30:00+01:00', label: 'Vacances Noël in' },
+    { date: '2027-01-18T00:00:00+01:00', label: 'Anniversaire John in' },
+    { date: '2027-02-12T00:00:00+01:00', label: 'Anniversaire Alice in' },
+    { date: '2027-02-19T18:30:00+01:00', label: "Vacances d'Hiver in" },
+    { date: '2027-04-16T18:30:00+02:00', label: 'Vacances Printemps in' },
+    { date: '2027-06-19T00:00:00+02:00', label: 'Anniversaire Mariana in' },
+    { date: '2027-07-02T18:30:00+02:00', label: "Vacances d'Été in" },
   ],
 
   // Display dimensions (Seeed Studio reTerminal E1002)
